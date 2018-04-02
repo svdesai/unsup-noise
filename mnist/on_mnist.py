@@ -26,7 +26,7 @@ parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='disables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
-parser.add_argument('--log-interval', type=int, default=10, metavar='N',
+parser.add_argument('--log-interval', type=int, default=100, metavar='N',
                     help='how many batches to wait before logging training status')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -124,14 +124,17 @@ class MNIST_Net_Features(nn.Module):
         return x
 
 
+# class MNIST_Full(nn.Module):
+#     def __init__(self,feature_model):
+#         super(MNIST_Full,self).__init__()
 
 
 
 
-train_set_size = 50000
+train_set_size = 60000
 test_set_size  = 10000
 
-train_batch_size = 64
+train_batch_size = 100
 
 learning_rate = 0.01
 momentum = 0.9
@@ -149,9 +152,8 @@ targets /= np.linalg.norm(targets,axis=1).reshape(-1,1)
 def train_unsup(epoch,model,optimizer,train_loader):
     model.train()
     #indexes to store the assignments
-    indices = np.empty(shape=(0,))
+    indices = np.empty(shape=(0,),dtype='int32')
 
-    temp_count = 2
     for batch_idx, (data, train_y) in enumerate(train_loader):
             #convert the data tensor to a variable
             data = Variable(data)
@@ -163,12 +165,17 @@ def train_unsup(epoch,model,optimizer,train_loader):
             #convert the output into numpy array
             output_arr = output.data.numpy()
 
+            #re do the assignment every 'reassign_interval' epochs
             if (epoch-1) % reassign_interval == 0:
                 if batch_idx == 0:
                      #re initialize the indices array
                      indices = np.empty(shape=(0,))
                 #normalize the output features
-                output_arr /= np.linalg.norm(output_arr,axis=1).reshape(-1,1)
+                denominator = np.linalg.norm(output_arr,axis=1).reshape(-1,1)
+                if denominator.all() == 0:
+                    output_arr /= 1e-5
+                else:
+                    output_arr /= denominator
 
                 #extract the targets from the targets array
                 target = targets[batch_idx:batch_idx + train_batch_size]
@@ -187,7 +194,11 @@ def train_unsup(epoch,model,optimizer,train_loader):
 
 
             #get the currently assigned targets to each feature vector based on the optimal assignment
-            assigned_targets = targets[optimal_indices]
+            current_offset = batch_idx*train_batch_size
+            assigned_indices = indices[current_offset : current_offset + train_batch_size]
+            assigned_indices = assigned_indices.astype(int)
+
+            assigned_targets = targets[assigned_indices]
 
             #convert into Variable
             assigned_targets_var = Variable(torch.from_numpy(assigned_targets).float())
@@ -217,7 +228,6 @@ def train_unsup(epoch,model,optimizer,train_loader):
 
 
 
-
 model = MNIST_Net_Features()
 if args.cuda:
     model.cuda()
@@ -234,6 +244,8 @@ train_loader = torch.utils.data.DataLoader(
 
 for epoch in range(1,epochs+1):
     train_unsup(epoch,model,optimizer,train_loader)
+
+
 #
 # model = MNIST_Net()
 # if args.cuda:
