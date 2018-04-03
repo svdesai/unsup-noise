@@ -131,7 +131,8 @@ class MNIST_Net_Features(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.dropout(x, training=self.training)
         x = self.fc2(x)
-        return x
+        return F.log_softmax(x, dim=1)
+
 
 
 # class MNIST_Full(nn.Module):
