@@ -113,14 +113,24 @@ class MNIST_Net_Features(nn.Module):
         self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
         self.conv2_drop = nn.Dropout2d()
         self.fc1 = nn.Linear(320, output_dim)
+        self.fc2 = nn.Linear(50, 10)
 
-    def forward(self, x):
+    def get_features(self, x):
         x = F.relu(F.max_pool2d(self.conv1(x), 2))
         x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
         x = x.view(-1, 320)
         x = F.relu(self.fc1(x))
         # x = F.dropout(x, training=self.training)
         # x = self.fc2(x)
+        return x
+
+    def forward(self, x):
+        x = F.relu(F.max_pool2d(self.conv1(x), 2))
+        x = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(x)), 2))
+        x = x.view(-1, 320)
+        x = F.relu(self.fc1(x))
+        x = F.dropout(x, training=self.training)
+        x = self.fc2(x)
         return x
 
 
@@ -138,7 +148,7 @@ train_batch_size = 100
 
 learning_rate = 0.01
 momentum = 0.9
-epochs = 1
+epochs = 9
 reassign_interval = 3
 
 #Generating targets
@@ -157,13 +167,15 @@ def train_unsup(epoch,model,optimizer,train_loader):
     for batch_idx, (data, train_y) in enumerate(train_loader):
             #convert the data tensor to a variable
             data = Variable(data)
+            if args.cuda:
+                 data = data.cuda()
             #clear the gradients in the optimizer
             optimizer.zero_grad()
             #forward pass this batch of data
-            output = model(data)
+            output = model.get_features(data)
 
             #convert the output into numpy array
-            output_arr = output.data.numpy()
+            output_arr = output.data.cpu().numpy()
 
             #re do the assignment every 'reassign_interval' epochs
             if (epoch-1) % reassign_interval == 0:
@@ -203,6 +215,8 @@ def train_unsup(epoch,model,optimizer,train_loader):
             #convert into Variable
             assigned_targets_var = Variable(torch.from_numpy(assigned_targets).float())
 
+            if args.cuda:
+                assigned_targets_var = assigned_targets_var.cuda()
 
 
             loss = F.mse_loss(output,assigned_targets_var)
@@ -227,7 +241,7 @@ def train_unsup(epoch,model,optimizer,train_loader):
 
 
 
-
+print('Initializing model..')
 model = MNIST_Net_Features()
 if args.cuda:
     model.cuda()
@@ -242,17 +256,6 @@ train_loader = torch.utils.data.DataLoader(
                    ])),
     batch_size=train_batch_size, shuffle=False, **kwargs)
 
+print('Starting training..')
 for epoch in range(1,epochs+1):
     train_unsup(epoch,model,optimizer,train_loader)
-
-
-#
-# model = MNIST_Net()
-# if args.cuda:
-#     model.cuda()
-#
-# optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
-#
-# for epoch in range(1, args.epochs + 1):
-#     train(epoch,model,optimizer)
-#     test(model)
