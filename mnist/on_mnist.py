@@ -106,14 +106,14 @@ test_loader = torch.utils.data.DataLoader(
 
 output_dim = 50
 
-class MNIST_Net_Features(nn.Module):
+class MNIST_Net(nn.Module):
     def __init__(self):
-        super(MNIST_Net_Features, self).__init__()
+        super(MNIST_Net, self).__init__()
         self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
         self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
         self.conv2_drop = nn.Dropout2d()
         self.fc1 = nn.Linear(320, output_dim)
-        self.fc2 = nn.Linear(50, 10)
+        self.fc2 = nn.Linear(output_dim, 10)
 
     def get_features(self, x):
         x = F.relu(F.max_pool2d(self.conv1(x), 2))
@@ -191,7 +191,8 @@ def train_unsup(epoch,model,optimizer,train_loader):
                     output_arr /= denominator
 
                 #extract the targets from the targets array
-                target = targets[batch_idx:batch_idx + train_batch_size]
+                current_offset = batch_idx*train_batch_size
+                target = targets[current_offset : current_offset + train_batch_size]
 
                 #generate cost matrix
                 cost_matrix = cdist(output_arr,target,metric='euclidean')
@@ -200,7 +201,7 @@ def train_unsup(epoch,model,optimizer,train_loader):
                 optimal_indices = linear_sum_assignment(cost_matrix)[1]
 
                 #add the batch index * batch_size as offset
-                optimal_indices += (batch_idx*train_batch_size)
+                optimal_indices += current_offset
 
                 #add the optimal indices to the global indices array for further reference
                 indices = np.append(indices,optimal_indices)
@@ -213,8 +214,18 @@ def train_unsup(epoch,model,optimizer,train_loader):
 
             assigned_targets = targets[assigned_indices]
 
+
+            if(current_offset > 59800):
+                print('current offset: %d, next offset: %d' % (current_offset,current_offset+train_batch_size))
+                print('assigned indices: ',assigned_indices)
+                print('assigned targets shape: ',assigned_targets.shape)
+
+
             #convert into Variable
-            assigned_targets_var = Variable(torch.from_numpy(assigned_targets).float())
+            assigned_targets = assigned_targets.astype(float)
+            assigned_targets_tens = torch.from_numpy(assigned_targets)
+            print(assigned_targets_tens)
+            assigned_targets_var = Variable(assigned_targets_tens)
 
             if args.cuda:
                 assigned_targets_var = assigned_targets_var.cuda()
@@ -243,7 +254,7 @@ def train_unsup(epoch,model,optimizer,train_loader):
 
 
 print('Initializing model..')
-model = MNIST_Net_Features()
+model = MNIST_Net()
 if args.cuda:
     model.cuda()
 
