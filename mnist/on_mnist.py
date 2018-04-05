@@ -163,7 +163,8 @@ targets /= np.linalg.norm(targets,axis=1).reshape(-1,1)
 def train_unsup(epoch,model,optimizer,train_loader):
     model.train()
     #indexes to store the assignments
-    indices = np.empty(shape=(0,),dtype='int32')
+    #indices = np.empty(shape=(0,),dtype='int32'
+    indices = []
 
     for batch_idx, (data, train_y) in enumerate(train_loader):
             #convert the data tensor to a variable
@@ -182,7 +183,7 @@ def train_unsup(epoch,model,optimizer,train_loader):
             if (epoch-1) % reassign_interval == 0:
                 if batch_idx == 0:
                      #re initialize the indices array
-                     indices = np.empty(shape=(0,))
+                     indices = []
                 #normalize the output features
                 denominator = np.linalg.norm(output_arr,axis=1).reshape(-1,1)
                 if denominator.all() == 0:
@@ -203,14 +204,19 @@ def train_unsup(epoch,model,optimizer,train_loader):
                 #add the batch index * batch_size as offset
                 optimal_indices += current_offset
 
+                optimal_indices = optimal_indices.tolist()
+
+
+
                 #add the optimal indices to the global indices array for further reference
-                indices = np.append(indices,optimal_indices)
+                #indices = np.append(indices,optimal_indices)
+                indices.extend(optimal_indices)
 
 
             #get the currently assigned targets to each feature vector based on the optimal assignment
             current_offset = batch_idx*train_batch_size
             assigned_indices = indices[current_offset : current_offset + train_batch_size]
-            assigned_indices = assigned_indices.astype(int)
+            #assigned_indices = np.array(assigned_indices,dtype='int32')
 
             assigned_targets = targets[assigned_indices]
 
@@ -218,21 +224,27 @@ def train_unsup(epoch,model,optimizer,train_loader):
             if(current_offset > 59800):
                 print('current offset: %d, next offset: %d' % (current_offset,current_offset+train_batch_size))
                 print('assigned indices: ',assigned_indices)
+                print('assigned targets: ',assigned_targets)
                 print('assigned targets shape: ',assigned_targets.shape)
 
 
             #convert into Variable
             assigned_targets = assigned_targets.astype(float)
-            assigned_targets_tens = torch.from_numpy(assigned_targets)
-            print(assigned_targets_tens)
+            assigned_targets_tens = torch.FloatTensor(assigned_targets)
+
+
             assigned_targets_var = Variable(assigned_targets_tens)
 
+            if(current_offset > 59800):
+                print(assigned_targets_tens)
+                print(assigned_targets_var)
             if args.cuda:
                 assigned_targets_var = assigned_targets_var.cuda()
 
+            #found the error: gotta debug it, indices are not being stored for the next epoch, when batch_idx is 0 again
+            print(current_offset)
 
             loss = F.mse_loss(output,assigned_targets_var)
-
             loss.backward()
             optimizer.step()
 
