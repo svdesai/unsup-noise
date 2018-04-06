@@ -70,39 +70,41 @@ test_loader = torch.utils.data.DataLoader(
 #         x = self.fc2(x)
 #         return F.log_softmax(x, dim=1)
 #
-# def train(epoch,model,optimizer):
-#     model.train()
-#     for batch_idx, (data, target) in enumerate(train_loader):
-#         if args.cuda:
-#             data, target = data.cuda(), target.cuda()
-#         data, target = Variable(data), Variable(target)
-#         optimizer.zero_grad()
-#         output = model(data)
-#         loss = F.nll_loss(output, target)
-#         loss.backward()
-#         optimizer.step()
-#         if batch_idx % args.log_interval == 0:
-#             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-#                 epoch, batch_idx * len(data), len(train_loader.dataset),
-#                 100. * batch_idx / len(train_loader), loss.data[0]))
+def train_sup(epoch,model,optimizer,train_loader):
+    model.train()
+    for batch_idx, (data, target) in enumerate(train_loader):
+        if args.cuda:
+            data, target = data.cuda(), target.cuda()
+        data, target = Variable(data), Variable(target)
+        optimizer.zero_grad()
+        output = model(data)
+        loss = F.nll_loss(output, target)
+        loss.backward()
+        optimizer.step()
+        if batch_idx % args.log_interval == 0:
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                epoch, batch_idx * len(data), len(train_loader.dataset),
+                100. * batch_idx / len(train_loader), loss.data[0]))
+
+    return model
 #
-# def test(model):
-#     model.eval()
-#     test_loss = 0
-#     correct = 0
-#     for data, target in test_loader:
-#         if args.cuda:
-#             data, target = data.cuda(), target.cuda()
-#         data, target = Variable(data, volatile=True), Variable(target)
-#         output = model(data)
-#         test_loss += F.nll_loss(output, target, size_average=False).data[0] # sum up batch loss
-#         pred = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
-#         correct += pred.eq(target.data.view_as(pred)).long().cpu().sum()
-#
-#     test_loss /= len(test_loader.dataset)
-#     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-#         test_loss, correct, len(test_loader.dataset),
-#         100. * correct / len(test_loader.dataset)))
+def test(model):
+    model.eval()
+    test_loss = 0
+    correct = 0
+    for data, target in test_loader:
+        if args.cuda:
+            data, target = data.cuda(), target.cuda()
+        data, target = Variable(data, volatile=True), Variable(target)
+        output = model(data)
+        test_loss += F.nll_loss(output, target, size_average=False).data[0] # sum up batch loss
+        pred = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
+        correct += pred.eq(target.data.view_as(pred)).long().cpu().sum()
+
+    test_loss /= len(test_loader.dataset)
+    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+        test_loss, correct, len(test_loader.dataset),
+        100. * correct / len(test_loader.dataset)))
 
 output_dim = 50
 
@@ -131,7 +133,7 @@ class MNIST_Net(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.dropout(x, training=self.training)
         x = self.fc2(x)
-        return F.log_softmax(x, dim=1)
+        return F.log_softmax(x)
 
 
 
@@ -160,12 +162,8 @@ targets /= np.linalg.norm(targets,axis=1).reshape(-1,1)
 
 
 
-def train_unsup(epoch,model,optimizer,train_loader):
+def train_unsup(epoch,model,optimizer,train_loader,indices):
     model.train()
-    #indexes to store the assignments
-    #indices = np.empty(shape=(0,),dtype='int32'
-    indices = []
-
     for batch_idx, (data, train_y) in enumerate(train_loader):
             #convert the data tensor to a variable
             data = Variable(data)
@@ -181,7 +179,9 @@ def train_unsup(epoch,model,optimizer,train_loader):
 
             #re do the assignment every 'reassign_interval' epochs
             if (epoch-1) % reassign_interval == 0:
+
                 if batch_idx == 0:
+                     print('Clearing the previous assignments..')
                      #re initialize the indices array
                      indices = []
                 #normalize the output features
@@ -221,11 +221,11 @@ def train_unsup(epoch,model,optimizer,train_loader):
             assigned_targets = targets[assigned_indices]
 
 
-            if(current_offset > 59800):
-                print('current offset: %d, next offset: %d' % (current_offset,current_offset+train_batch_size))
-                print('assigned indices: ',assigned_indices)
-                print('assigned targets: ',assigned_targets)
-                print('assigned targets shape: ',assigned_targets.shape)
+            # if(current_offset > 59800):
+            #     print('current offset: %d, next offset: %d' % (current_offset,current_offset+train_batch_size))
+            #     print('assigned indices: ',assigned_indices)
+            #     print('assigned targets: ',assigned_targets)
+            #     print('assigned targets shape: ',assigned_targets.shape)
 
 
             #convert into Variable
@@ -235,20 +235,16 @@ def train_unsup(epoch,model,optimizer,train_loader):
 
             assigned_targets_var = Variable(assigned_targets_tens)
 
-            if(current_offset > 59800):
-                print(assigned_targets_tens)
-                print(assigned_targets_var)
             if args.cuda:
                 assigned_targets_var = assigned_targets_var.cuda()
 
             #found the error: gotta debug it, indices are not being stored for the next epoch, when batch_idx is 0 again
-            print(current_offset)
 
             loss = F.mse_loss(output,assigned_targets_var)
             loss.backward()
             optimizer.step()
 
-            # print('Batch index: %d, output shape: %s, target shape: %s'  % (batch_idx,output_arr.shape,target.shape))
+            # print('Batch index: %d, output shape: %s, target shape: o%s'  % (batch_idx,output_arr.shape,target.shape))
             # print('assigned targets: ',assigned_targets.shape)
             # print('indices shape: ',indices.shape,'\n')
             # if batch_idx > temp_count :
@@ -261,9 +257,18 @@ def train_unsup(epoch,model,optimizer,train_loader):
                       epoch, batch_idx * len(data), len(train_loader.dataset),
                    100. * batch_idx / len(train_loader), loss.data[0]))
 
+    #Return the model and assignment list so it can be used later.
+    return model, indices
 
 
+def freeze_conv_layers(model):
+   for param in model.conv1.parameters():
+     param.requires_grad = False
 
+   for param in model.conv2.parameters():
+     param.requires_grad = False
+
+   return model
 
 print('Initializing model..')
 model = MNIST_Net()
@@ -280,6 +285,35 @@ train_loader = torch.utils.data.DataLoader(
                    ])),
     batch_size=train_batch_size, shuffle=False, **kwargs)
 
-print('Starting training..')
+print('Training (unsupervised)..')
+#indexes to store the assignments
+indices = []
 for epoch in range(1,epochs+1):
-    train_unsup(epoch,model,optimizer,train_loader)
+    model, indices = train_unsup(epoch,model,optimizer,train_loader,indices)
+
+print('Got tshe features..')
+print('Training with labels..')
+
+print('Freezing convolutional layers')
+#freezing the convolutional layers
+model = freeze_conv_layers(model)
+
+
+optimizer = optim.SGD([
+		{'params': model.fc1.parameters()},
+		{'params': model.fc2.parameters()}
+		],lr=learning_rate,momentum=momentum)
+
+train_loader = torch.utils.data.DataLoader(
+    datasets.MNIST('../data', train=True, download=True,
+                   transform=transforms.Compose([
+                       transforms.ToTensor(),
+                       transforms.Normalize((0.1307,), (0.3081,))
+                   ])),
+    batch_size=train_batch_size, shuffle=True, **kwargs)
+
+mlp_epochs = 12
+
+for epoch in range(1,mlp_epochs+1):
+    model = train_sup(epoch,model,optimizer,train_loader)
+    test(model)
