@@ -1,0 +1,33 @@
+have to do:
+- apply batch norm layers
+- change batch size
+
+09-04-2018 00:03
+
+unsup train: 9 epochs
+sup train: 12 epochs
+lr = 0.01
+train accuracy: 76%
+test accuracy: 91%
+
+
+
+
+07-04-2018 20:29
+
+Unsupervised learning of features. Not freezing conv layers.
+unsup train: 9 epochs
+sup train: 12 epochs
+lr = 0.01
+test accuracy: 99%
+
+
+
+
+07-04-2018 20:25
+
+Cleaned the code. Ran. Unsupervised features and supervised learning of 2 fc layers on top.
+unsup train: 9 epochs
+sup train: 12 epochs
+lr = 0.01
+test accuracy: 91%
