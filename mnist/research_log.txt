@@ -1,3 +1,39 @@
+
+
+
+10-04-2018 17:10
+
+ran the visualization program for unsupervised features
+features collapsing all over from 1 to 9 epochs..
+
+reassign_interval was 9
+
+
+
+10-04-2018 16:45
+
+ran the visualization program for unsupervised features
+
+features collapsing every 3 epochs
+
+
+10-04-2018 11:10
+
+cleaned the code to use a single model
+
+Train set: Average loss: 0.6120, Accuracy: 48052/60000 (80%)
+Test set: Average loss: 0.2610, Accuracy: 9224/10000 (92%)
+
+
+10-04-2018 10:39
+
+applied batch norm
+tried different batch sizes
+
+didn't work out..
+test accuracy still 92%
+
+
 have to do:
 - apply batch norm layers
 - change batch size
@@ -20,7 +56,7 @@ unsup train: 9 epochs
 sup train: 12 epochs
 lr = 0.01
 test accuracy: 99%
-
+ -
 
 
 
