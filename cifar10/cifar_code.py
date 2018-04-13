@@ -1,19 +1,24 @@
-from __future__ import print_function
-import argparse
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Apr 12 20:49:29 2018
+
+@author: ayushivishwakarma
+"""
+
 import torch
-import torch.nn as nn
-
-import torch.nn.functional as F
+import argparse
+import torchvision
+import torchvision.transforms as transforms
 import torch.optim as optim
-from torchvision import datasets, transforms
+import torch.nn as nn
 from torch.autograd import Variable
-
-import numpy as np
+import torch.nn.functional as F
+from torchvision import datasets, transforms
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.distance import cdist
-from mnist_model import MNIST_Net
-
-
+from cifar10_model import Cifar10_Net
+import numpy as np
 
 # Training settings
 parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
@@ -41,44 +46,28 @@ args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
 torch.manual_seed(args.seed)
-if args.cuda:
-    torch.cuda.manual_seed(args.seed)
 
 
-output_dim = 50
+output_dim = 10
 train_set_size = 60000
 test_set_size  = 10000
 
 train_batch_size = 100
 
-
-
-
-
 kwargs = {'num_workers': 1, 'pin_memory': True} if args.cuda else {}
-train_loader = torch.utils.data.DataLoader(
-    datasets.MNIST('../data', train=True, download=True,
-                   transform=transforms.Compose([
-                       transforms.ToTensor(),
-                       transforms.Normalize((0.1307,), (0.3081,))
-                   ])),
-    batch_size=args.batch_size, shuffle=False, **kwargs)
-test_loader = torch.utils.data.DataLoader(
-    datasets.MNIST('../data', train=False, transform=transforms.Compose([
-                       transforms.ToTensor(),
-                       transforms.Normalize((0.1307,), (0.3081,))
-                   ])),
-    batch_size=args.test_batch_size, shuffle=True, **kwargs)
+trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
+                                        download=True)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=4,
+                                          shuffle=True, num_workers=2)
 
+testset = torchvision.datasets.CIFAR10(root='./data', train=False,
+                                       download=True)
+testloader = torch.utils.data.DataLoader(testset, batch_size=4,
+                                         shuffle=False, num_workers=2)
 
-
-model = MNIST_Net(output_dim=50)
+model = Cifar10_Net()
 if args.cuda:
     model.cuda()
-
-
-
-
 
 def train_sup(epoch,optimizer,train_loader):
     model.train()
@@ -87,6 +76,7 @@ def train_sup(epoch,optimizer,train_loader):
     for batch_idx, (data, target) in enumerate(train_loader):
         if args.cuda:
             data, target = data.cuda(), target.cuda()
+
         data, target = Variable(data), Variable(target)
         optimizer.zero_grad()
         output = model(data)
@@ -107,8 +97,6 @@ def train_sup(epoch,optimizer,train_loader):
     print('\nTrain set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         train_loss, correct, len(train_loader.dataset),
         100. * correct / len(train_loader.dataset)))
-
-
 
 
 
@@ -279,3 +267,59 @@ train_loader = torch.utils.data.DataLoader(
 for epoch in range(1,args.mlp_epochs+1):
     train_sup(epoch,optimizer,train_loader)
     test()
+
+
+
+
+'''
+transform = transforms.Compose(
+    [transforms.ToTensor(),
+     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
+trainset = torchvision.datasets.CIFAR10(root='./data', train=True,
+                                        download=True, transform=transform)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=4,
+                                          shuffle=True, num_workers=2)
+
+testset = torchvision.datasets.CIFAR10(root='./data', train=False,
+                                       download=True, transform=transform)
+testloader = torch.utils.data.DataLoader(testset, batch_size=4,
+                                         shuffle=False, num_workers=2)
+
+classes = ('plane', 'car', 'bird', 'cat',
+           'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+
+
+net = Cifar10_Net()
+
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+
+for epoch in range(2):  # loop over the dataset multiple times
+
+    running_loss = 0.0
+    for i, data in enumerate(trainloader, 0):
+        # get the inputs
+        inputs, labels = data
+
+        # wrap them in Variable
+        inputs, labels = Variable(inputs), Variable(labels)
+
+        # zero the parameter gradients
+        optimizer.zero_grad()
+
+        # forward + backward + optimize
+        outputs = net(inputs)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+
+        # print statistics
+        running_loss += loss.data[0]
+        if i % 2000 == 1999:    # print every 2000 mini-batches
+            print('[%d, %5d] loss: %.3f' %
+                  (epoch + 1, i + 1, running_loss / 2000))
+            running_loss = 0.0
+
+print('Finished Training')
+'''
