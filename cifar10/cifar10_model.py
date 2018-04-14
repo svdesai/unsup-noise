@@ -28,9 +28,11 @@ class Cifar10_Net(nn.Module):
         x = self.fc3(x)
         return x
     
-    def get_features(self, x):
+
+def get_features(self, x):
         x = F.relu(F.max_pool2d(self.conv2(x),2))
         x = F.relu(F.max_pool2d(self.conv2(x),2))
-        x = x.view(-1, 320)
+        x = x.view(-1, 16 * 5 * 5)
         x = F.relu(self.fc1(x))
         return x
+    

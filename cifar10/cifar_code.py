@@ -189,7 +189,7 @@ def test():
     model.eval()
     test_loss = 0
     correct = 0
-    for data, target in test_loader:
+    for data, target in testloader:
         if args.cuda:
             data, target = data.cuda(), target.cuda()
         data, target = Variable(data, volatile=True), Variable(target)
@@ -198,10 +198,10 @@ def test():
         pred = output.data.max(1, keepdim=True)[1] # get the index of the max log-probability
         correct += pred.eq(target.data.view_as(pred)).long().cpu().sum()
 
-    test_loss /= len(test_loader.dataset)
+    test_loss /= len(testloader.dataset)
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        test_loss, correct, len(test_loader.dataset),
-        100. * correct / len(test_loader.dataset)))
+        test_loss, correct, len(testloader.dataset),
+        100. * correct / len(testloader.dataset)))
 
 
 
