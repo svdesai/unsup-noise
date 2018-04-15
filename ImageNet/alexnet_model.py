@@ -46,7 +46,7 @@ class AlexNet(nn.Module):
             nn.ReLU(inplace=True),
             nn.Linear(4096, num_classes),
         )
-        self.features = nn.Sequential(
+        self.fc1_features = nn.Sequential(
             nn.Dropout(),
             nn.Linear(256 * 6 * 6, 4096),
             nn.ReLU(inplace=True)
@@ -61,7 +61,7 @@ class AlexNet(nn.Module):
     def get_features(self, x):
         x = self.features(x)
         x = x.view(x.size(0), 256 * 6 * 6)
-        x = self.features(x)
+        x = self.fc1_features(x)
         return x
 
 

@@ -20,24 +20,14 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-from ImageNet_model import AlexNet
-import torchvision.models as models
-
-model_names = sorted(name for name in models.__dict__
-    if name.islower() and not name.startswith("__")
-    and callable(models.__dict__[name]))
+from alexnet_model import alexnet
 
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
 
-parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet18',
-                    choices=model_names,
-                    help='model architecture: ' +
-                        ' | '.join(model_names) +
-                        ' (default: alexnet)')
-
+parser.add_argument('--arch', '-a', metavar='ARCH', default='alexnet',help='only alexnet works')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
                     help='number of data loading workers (default: 4)')
 parser.add_argument('--epochs', default=90, type=int, metavar='N',
@@ -71,6 +61,9 @@ best_prec1 = 0
 
 
 def main():
+
+
+    #Parsing arguments
     global args, best_prec1
     args = parser.parse_args()
 
@@ -80,7 +73,10 @@ def main():
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size)
 
-    model=AlexNet()
+
+    #initializing the model
+    model = alexnet()
+
     if not args.distributed:
         if args.arch.startswith('alexnet') or args.arch.startswith('vgg'):
             model.features = torch.nn.DataParallel(model.features)
@@ -91,12 +87,16 @@ def main():
         model.cuda()
         model = torch.nn.parallel.DistributedDataParallel(model)
 
+
+
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda()
 
     optimizer = torch.optim.SGD(model.parameters(), args.lr,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
+
+
 
     # optionally resume from a checkpoint
     if args.resume:
@@ -113,6 +113,9 @@ def main():
             print("=> no checkpoint found at '{}'".format(args.resume))
 
     cudnn.benchmark = True
+
+
+
 
     # Data loading code
     traindir = os.path.join(args.data, 'train')
@@ -157,11 +160,18 @@ def main():
             train_sampler.set_epoch(epoch)
         adjust_learning_rate(optimizer, epoch)
 
+
+
+
         # train for one epoch
         train(train_loader, model, criterion, optimizer, epoch)
 
+
         # evaluate on validation set
         prec1 = validate(val_loader, model, criterion)
+
+
+        
 
         # remember best prec@1 and save checkpoint
         is_best = prec1 > best_prec1
