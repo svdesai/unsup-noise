@@ -46,11 +46,22 @@ class AlexNet(nn.Module):
             nn.ReLU(inplace=True),
             nn.Linear(4096, num_classes),
         )
+        self.features = nn.Sequential(
+            nn.Dropout(),
+            nn.Linear(256 * 6 * 6, 4096),
+            nn.ReLU(inplace=True)
+            )
 
     def forward(self, x):
         x = self.features(x)
         x = x.view(x.size(0), 256 * 6 * 6)
         x = self.classifier(x)
+        return x
+
+    def get_features(self, x):
+        x = self.features(x)
+        x = x.view(x.size(0), 256 * 6 * 6)
+        x = self.features(x)
         return x
 
 
