@@ -1,0 +1,6 @@
+things to do:
+
+preprocessing (use gradients instead of images)
+generate targets       -done
+
+every 20 epochs, freeze conv layers and learn an mlp classifier on top for max 100 epochs

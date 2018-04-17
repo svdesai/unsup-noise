@@ -22,8 +22,6 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from alexnet_model import alexnet
 
-import utils
-
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('data', metavar='DIR',
@@ -58,15 +56,6 @@ parser.add_argument('--dist-url', default='tcp://224.66.41.62:23456', type=str,
 parser.add_argument('--dist-backend', default='gloo', type=str,
                     help='distributed backend')
 
-parser.add_argument('--ra', type=int, default=3, metavar='N',
-                    help='reassign interval')
-parser.add_argument('--mlp_epochs', type=int, default=12, metavar='N',
-                    help='no of epochs to train the fc layers')
-parser.add_argument('--output-dim', type=int, default='4096', metavar='N',
-                    help='fc1 dimension')
-parser.add_argument('--mlp-lr', type=float, default=0.01, metavar='LR',
-                    help='learning rate (default: 0.01)')
-
 best_prec1 = 0
 
 
@@ -76,9 +65,6 @@ def main():
     #Parsing arguments
     global args, best_prec1
     args = parser.parse_args()
-
-    #feature dimensions
-    output_dim = args.output_dim
 
     args.distributed = args.world_size > 1
 
@@ -100,6 +86,16 @@ def main():
     else:
         model.cuda()
         model = torch.nn.parallel.DistributedDataParallel(model)
+
+
+
+    # define loss function (criterion) and optimizer
+    criterion = nn.CrossEntropyLoss().cuda()
+
+    optimizer = torch.optim.SGD(model.parameters(), args.lr,
+                                momentum=args.momentum,
+                                weight_decay=args.weight_decay)
+
 
 
     # optionally resume from a checkpoint
@@ -142,14 +138,13 @@ def main():
     else:
         train_sampler = None
 
-    #train_loader = torch.utils.data.DataLoader(
-    #    train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
-    #    num_workers=args.workers, pin_memory=True, sampler=train_sampler)
-
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=False,
+        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
         num_workers=args.workers, pin_memory=True, sampler=train_sampler)
 
+    #train_loader = torch.utils.data.DataLoader(
+    #    train_dataset, batch_size=args.batch_size, shuffle=False,
+    #    num_workers=args.workers, pin_memory=True, sampler=train_sampler)
 
     val_loader = torch.utils.data.DataLoader(
         datasets.ImageFolder(valdir, transforms.Compose([
@@ -161,43 +156,12 @@ def main():
         batch_size=args.batch_size, shuffle=False,
         num_workers=args.workers, pin_memory=True)
 
-
-    train_set_size = len(train_dataset)
-    val_set_size = len(val_loader)
-
-    #Generating targets
-    targets = utils.generateTargetReps(train_set_size,output_dim)
-
-    #print('targets shape: ',targets.shape)
-
     if args.evaluate:
         validate(val_loader, model, criterion)
         return
 
-
-    #training in an unsupervised manner
-    criterion = nn.MSELoss().cuda()
-
-    optimizer = torch.optim.SGD(
-    		model.parameters(),
-    		args.lr,momentum=args.momentum,
-            weight_decay=args.weight_decay)
-
-    print('Training (unsupervised)..')
-    for epoch in range(args.start_epoch,args.epochs):
-        targets = train_unsup(train_loader, model, criterion, optimizer, epoch, targets)
-
-
-
-    # define loss function (criterion) and optimizer for MLP
-    criterion = nn.CrossEntropyLoss().cuda()
-
-    optimizer = torch.optim.SGD([
-    		{'params': model.classifier.parameters()}
-    		], args.mlp_lr,momentum=args.momentum,
-            weight_decay=args.weight_decay)
-    print('Training an MLP..')
-    for epoch in range(0, args.mlp_epochs):
+    print('Starting training..')
+    for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
         adjust_learning_rate(optimizer, epoch)
@@ -225,7 +189,6 @@ def main():
             'best_prec1': best_prec1,
             'optimizer' : optimizer.state_dict(),
         }, is_best)
-
 
 
 def train(train_loader, model, criterion, optimizer, epoch):
@@ -275,87 +238,6 @@ def train(train_loader, model, criterion, optimizer, epoch):
                   'Prec@5 {top5.val:.3f} ({top5.avg:.3f})'.format(
                    epoch, i, len(train_loader), batch_time=batch_time,
                    data_time=data_time, loss=losses, top1=top1, top5=top5))
-
-
-
-
-def train_unsup(train_loader, model, criterion, optimizer, epoch, targets):
-    batch_time = AverageMeter()
-    data_time = AverageMeter()
-    losses = AverageMeter()
-    #top1 = AverageMeter()
-    #top5 = AverageMeter()
-    batch_size = args.batch_size
-
-    # switch to train mode
-    model.train()
-
-    end = time.time()
-    for i, (input, target_y) in enumerate(train_loader):
-        # measure data loading time
-        data_time.update(time.time() - end)
-
-        img_index = i * batch_size
-        #print('img index: ',img_index)
-        #target = target.cuda(async=True)
-        target = targets[img_index : img_index + batch_size]
-        #print('target shape: ',target.shape)
-        #print('input shape: ',input.shape)
-
-        input_var = torch.autograd.Variable(input)
-
-        #getting the targets
-        target_tens = torch.from_numpy(target).float()
-        target_var = torch.autograd.Variable(target_tens)
-
-        target_var = target_var.cuda()
-
-        # compute output
-        output = model.get_features(input_var)
-
-        #print('output data shape: ', output.data.shape)
-        #print('target shape: ',target.shape)
-
-
-
-        #if it's time to permute the assignments
-        if (epoch) % args.ra == 0 :
-            #print('permuting the assignments..')
-            #permute the assignments
-            batchTargets = utils.calc_optimal_target_permutation(output.data.cpu().numpy(),target)
-            #add those targets to the target list
-            targets[img_index : img_index + batch_size] = batchTargets
-
-
-
-
-        #top1.update(prec1[0], input.size(0))
-        #top5.update(prec5[0], input.size(0))
-
-        # compute gradient and do SGD step
-        loss = criterion(output, target_var)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        # measure accuracy and record loss
-        #prec1, prec5 = accuracy(output.data, target, topk=(1, 5))
-        losses.update(loss.data[0], input.size(0))
-
-        # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
-
-        if i % args.print_freq == 0:
-            print('Epoch: [{0}][{1}/{2}]\t'
-                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                  'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
-                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(
-                   epoch, i, len(train_loader), batch_time=batch_time,
-                   data_time=data_time, loss=losses))
-
-    return targets
-
 
 
 def validate(val_loader, model, criterion):
